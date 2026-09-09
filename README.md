@@ -30,6 +30,16 @@ Aucun texte d'article, aucune décision de justice et aucun délai procédural n
 
 ## 🚀 Démarrage rapide
 
+### Windows — Version portable (sans installation) 🇩🇿
+
+1. Décompressez `release/AdvocatePro-Algerie-Portable-Windows-x64.zip` où vous voulez (Bureau, disque externe, clé USB…).
+2. Double-cliquez sur **`ADVOCATE-PRO-START.bat`** — le navigateur s'ouvre automatiquement sur `http://localhost:8787`.
+3. Première exécution : la base de données se crée automatiquement dans le dossier `data/` (aucune installation, aucune connexion Internet, aucun pilote requis).
+
+La version portable embarque son propre moteur Node.js (`node.exe` v22) et utilise le **SQLite intégré de Node** (`node:sqlite`) — zéro module natif à compiler, 100 % autonome. Toutes les données (base + documents) restent dans le dossier `data/` : la sauvegarde consiste simplement à copier ce dossier. / النسخة المحمولة لا تحتاج أي تثبيت — فك الضغط ثم شغّل `ADVOCATE-PRO-START.bat`.
+
+### Développement (Linux / macOS / Windows)
+
 ```bash
 npm install            # dépendances
 npm run seed           # initialise la base (référentiels + données de démonstration)
@@ -39,7 +49,7 @@ npm start              # serveur production → http://localhost:8787
 
 Mode développement : `npm run dev:api` (API :8787) + `npm run dev` (Vite :5173).
 
-**Base de données** : SQLite (`data/advocate.db`) — sans installation externe. Sauvegardes : Paramètres → Sauvegarde (export JSON complet).
+**Base de données** : SQLite (`data/advocate.db`) — sans installation externe. Deux moteurs, automatiquement sélectionnés : `better-sqlite3` si installé (développement), sinon le SQLite intégré de Node ≥ 22.5 (build portable — aucune compilation native). Sauvegardes : Paramètres → Sauvegarde (export JSON complet).
 
 ### Comptes de démonstration
 
@@ -104,7 +114,7 @@ Mode développement : `npm run dev:api` (API :8787) + `npm run dev` (Vite :5173)
 |---|---|
 | Frontend | React 18, Vite 5, Ant Design 5 (RTL natif), Recharts |
 | Backend | Node.js, Express 4 |
-| Base de données | SQLite (better-sqlite3) — WAL |
+| Base de données | SQLite — WAL (better-sqlite3 en dev, `node:sqlite` intégré en portable) |
 | Auth | jsonwebtoken + bcryptjs |
 | i18n | `/locales/fr.json` + `/locales/ar.json` — aucun texte UI codé en dur |
 
@@ -131,6 +141,9 @@ public/locales/       # ar.json / fr.json
 bash test-api.sh      # 28 vérifications API (auth, RBAC, moteur d'échéances,
                       # conflits, recherche bilingue, ICS, audit…)
 ```
+
+**Dépannage installation** : si `better-sqlite3` ne trouve pas de binaire pré-compilé et échoue via node-gyp, indiquer les en-têtes Node locaux :
+`npm install --nodedir=$(dirname $(dirname $(which node)))` (ou installez les `node-gyp` build tools).
 
 ---
 

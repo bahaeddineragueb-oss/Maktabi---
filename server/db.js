@@ -1,16 +1,64 @@
 /**
- * ADVOCATE PRO ALGÉRIE — Database layer (SQLite)
+ * ADVOCATE PRO ALGÉRIE — Database layer
  * Gestion cabinet d'avocats — Algérie / نظام إدارة مكتب المحامي — الجزائر
+ *
+ * Driver-agnostic SQLite layer:
+ *  - prefers `better-sqlite3` when installed (development / Linux / macOS)
+ *  - falls back to Node's built-in `node:sqlite` (portable Windows build — no
+ *    native compilation required; Node >= 22.5)
+ * Both expose the same prepare/run/get/all/exec/pragma/transaction surface used
+ * throughout the application.
  */
 const path = require('path');
 const fs = require('fs');
-const Database = require('better-sqlite3');
 
 const DATA_DIR = process.env.ADV_DATA_DIR || path.join(__dirname, '..', 'data');
 const UPLOADS_DIR = process.env.ADV_UPLOADS_DIR || path.join(DATA_DIR, 'uploads');
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-const db = new Database(path.join(DATA_DIR, 'advocate.db'));
+let db;
+let DRIVER;
+
+try {
+  const Database = require('better-sqlite3');
+  DRIVER = 'better-sqlite3';
+  db = new Database(path.join(DATA_DIR, 'advocate.db'));
+} catch (e) {
+  // Portable build: built-in SQLite (Node >= 22.5), wrapped for API compatibility.
+  const { DatabaseSync } = require('node:sqlite');
+  DRIVER = 'node:sqlite (built-in)';
+  class CompatibleDatabase extends DatabaseSync {
+    pragma(sql) { return this.exec(`PRAGMA ${sql}`); }
+    // better-sqlite3 binds `undefined` as NULL; node:sqlite throws. Normalize
+    // so both drivers behave identically across the whole application.
+    prepare(sql) {
+      const stmt = super.prepare(sql);
+      const norm = (args) => args.map((a) => (a === undefined ? null : a));
+      return {
+        run: (...args) => stmt.run(...norm(args)),
+        get: (...args) => stmt.get(...norm(args)),
+        all: (...args) => stmt.all(...norm(args)),
+        iterate: (...args) => stmt.iterate(...norm(args)),
+        raw: () => stmt,
+        source: sql
+      };
+    }
+    transaction(fn) {
+      return (...args) => {
+        this.exec('BEGIN');
+        try {
+          const result = fn(...args);
+          this.exec('COMMIT');
+          return result;
+        } catch (err) {
+          this.exec('ROLLBACK');
+          throw err;
+        }
+      };
+    }
+  }
+  db = new CompatibleDatabase(path.join(DATA_DIR, 'advocate.db'));
+}
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
@@ -664,4 +712,4 @@ function resetSchema() {
   db.exec('PRAGMA foreign_keys = ON');
 }
 
-module.exports = { db, now, DATA_DIR, UPLOADS_DIR, SCHEMA, resetSchema };
+module.exports = { db, now, DATA_DIR, UPLOADS_DIR, SCHEMA, resetSchema, DRIVER };

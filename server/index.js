@@ -32,11 +32,13 @@ app.use('/api/finance', require('./routes/finance'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/insights', require('./routes/insights'));
 
-// auto-seed reference data when DB is fresh (first boot)
+// auto-seed reference data when DB is fresh (first boot — portable friendly:
+// runs in-process, never spawns a child `node` which may not exist on PATH)
 try {
   if (db.prepare('SELECT COUNT(*) c FROM users').get().c === 0) {
-    console.log('📄 Empty database detected — running seeder…');
-    require('child_process').execSync('node server/seed/index.js --run', { stdio: 'inherit', cwd: path.join(__dirname, '..') });
+    console.log('📄 Base de données vide — initialisation (première exécution)… / قاعدة بيانات فارغة — جارٍ التهيئة (أول تشغيل)…');
+    require('./seed').runSeed({ run: true });
+    console.log('✅ Base initialisée avec succès / تم تهيئة قاعدة البيانات بنجاح');
   }
 } catch (e) {
   console.warn('Auto-seed skipped:', e.message);
@@ -65,7 +67,29 @@ app.use((err, req, res, next) => {
   res.status(500).json({ ok: false, error: 'internal_error' });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`⚖️  ADVOCATE PRO ALGÉRIE — server ready on http://0.0.0.0:${PORT}`);
-  console.log(`   API: /api — production static: ${isProd ? 'enabled' : 'disabled (dev mode)'}`);
+function openBrowser(url) {
+  try {
+    const { exec } = require('child_process');
+    if (process.platform === 'win32') exec(`start "" ${url}`);
+    else if (process.platform === 'darwin') exec(`open ${url}`);
+    else exec(`xdg-open ${url} 2>/dev/null || true`);
+  } catch (e) { /* non-blocking */ }
+}
+
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`⚖️  ADVOCATE PRO ALGÉRIE — server ready on http://localhost:${PORT}`);
+  console.log(`   Driver SQLite: ${require('./db').DRIVER || 'better-sqlite3'} | production static: ${isProd ? 'enabled' : 'disabled (dev mode)'}`);
+  if (process.env.ADV_OPEN_BROWSER === '1') setTimeout(() => openBrowser(`http://localhost:${PORT}`), 1200);
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error('');
+    console.error(`❌ Le port ${PORT} est déjà utilisé / المنفذ ${PORT} مستعمل مسبقاً`);
+    console.error(`   → Fermez l'application déjà ouverte, ou changez le port (set PORT=xxxx).`);
+    console.error(`   → أغلق النسخة المفتوحة سابقاً أو غيّر رقم المنفذ.`);
+  } else {
+    console.error('Server error:', err.message);
+  }
+  process.exit(1);
 });
